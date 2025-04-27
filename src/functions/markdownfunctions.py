@@ -105,3 +105,14 @@ def text_to_textnodes(text):
     
     print(new_nodes)
     return new_nodes
+
+def markdown_to_blocks(markdown):
+    blockstoreturn = []
+    
+    for block in markdown.split("\n\n"):
+        print("block:")
+        print(block)
+        if block.strip() != "":
+            blockstoreturn.append(block.strip())
+            
+    return blockstoreturn
