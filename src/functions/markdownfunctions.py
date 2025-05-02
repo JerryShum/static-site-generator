@@ -1,6 +1,10 @@
 import re
+import textwrap
 
 from textnode import TextNode, TextType
+from htmlnode import HTMLNode, text_node_to_html_node
+from parentnode import ParentNode
+from functions.markdownblocks import block_to_block_type, BlockType
 
 
 def split_nodes_delimiter(old_nodes, delimiter, text_type):
@@ -94,8 +98,10 @@ def extract_markdown_links(text):
 def text_to_textnodes(text):
     new_nodes = []
     
-    #! Conver the raw text into 1 textnode
-    new_nodes.append( TextNode(text, TextType.TEXT));
+    # Normalize line breaks to space
+    normalized_text = re.sub(r"\s*\n\s*", " ", text.strip())
+    
+    new_nodes.append(TextNode(normalized_text, TextType.TEXT))
     
     new_nodes = split_nodes_delimiter(new_nodes, "**", TextType.BOLD)
     new_nodes = split_nodes_delimiter(new_nodes, "_", TextType.ITALIC)
@@ -103,8 +109,8 @@ def text_to_textnodes(text):
     new_nodes = split_nodes_image(new_nodes)
     new_nodes = split_nodes_link(new_nodes)
     
-    print(new_nodes)
     return new_nodes
+
 
 def markdown_to_blocks(markdown):
     blockstoreturn = []
@@ -116,3 +122,138 @@ def markdown_to_blocks(markdown):
             blockstoreturn.append(block.strip())
             
     return blockstoreturn
+
+def text_to_children(text):
+    children_nodes = []
+    
+    #@ Convert to text nodes first
+    text_nodes = text_to_textnodes(text)
+    
+    #@ Convert text nodes to html nodes
+    for text_node in text_nodes:
+        html_node = text_node_to_html_node(text_node)
+        children_nodes.append(html_node)
+        
+           #@ Converting text to textnodes
+                # # [TextNode("This is ", TEXT), TextNode("bold", BOLD), TextNode(" heading", TEXT)]
+                
+                # text_nodes = text_to_textnodes(after)
+                
+                # for text_node in text_nodes:
+                #     #@ convert textnodes into html nodes
+                #     # HTMLNode(None, "This is ")
+                #     # HTMLNode("b", None, [HTMLNode(None, "bold")])
+                #     # HTMLNode(None, " heading")
+
+                    
+                #     html_node = text_node_to_html_node(text_node)
+                #     childrenNodes.append(html_node)
+                    
+                # headingBlockNode = HTMLNode(headingtag, None, childrenNodes)
+                # # HTMLNode("h1", None, children = [HTMLNode(None, "This is "), HTMLNode("b", None, [HTMLNode(None, "bold")]), HTMLNode(None, " heading")])
+        
+    return children_nodes
+        
+        
+def markdown_to_html_node(markdown):
+    blocks = markdown_to_blocks(markdown)
+    overallhtmlnodes = []
+    
+    for block in blocks:
+        blockType = block_to_block_type(block)
+        # Based on blocktype -> create associated htmlnode
+        # Blocktypes: heading, code, quote, unordered_list, ordered_list, paragraph
+        match(blockType):
+            case BlockType.heading:
+                #! find number of # in heading of block
+                # ##### heading 1
+                #@ Splits the heading into before and after (before is the ####, after is the rest after the space)
+                # ["# This is **bold** heading", "This is a paragraph with _italic_ text."]
+                before,after = block.split(" ", 1)
+                
+                headingtag = f"h{len(before)}"
+                childrenNodes = text_to_children(after)
+                headingBlockNode = HTMLNode(headingtag, None, childrenNodes)
+                
+     
+                overallhtmlnodes.append(headingBlockNode)
+                
+                
+            case BlockType.code:
+                    # gets rid of the first 3 and last 3 characters (```), dedent code
+                content = textwrap.dedent(block[3:-3]).strip() + "\n"
+                
+                text_node = TextNode(content, TextType.TEXT)
+                code_node = text_node_to_html_node(text_node)
+                
+                code_html_node = HTMLNode("code", None, [code_node])
+                structured_code_html_node = HTMLNode("pre", None, [code_html_node])
+                overallhtmlnodes.append(structured_code_html_node)
+                
+            case BlockType.quote:
+                # quotes have lines that start with >
+                # strip all lines of the >
+                lines = block.split("\n")
+                quote_content = ""
+                
+                for line in lines:
+                    if line.startswith(">"):
+                        quote_content += line[1:].lstrip() + " "
+                
+                childrenNodes = text_to_children(quote_content.strip())
+                
+                #@ quote block node:
+                quoteBlockNode = HTMLNode("blockquote", None, childrenNodes)
+                overallhtmlnodes.append(quoteBlockNode)                    
+                
+            case BlockType.unordered_list:
+                # unordered lists have lines that start with -
+                # strip all lines of - and conver them to the appropriate text
+                
+                lines = block.split("\n")
+                blockChildren = []
+                
+                for line in lines:
+                    # handle the inline formatting (bold, italic, etc.)
+                    if line.startswith("-"):
+                        inlineHTML = text_to_children(line[1:].strip())
+                        # wrap in li
+                        blockChild = HTMLNode("li", None, inlineHTML)
+                        blockChildren.append(blockChild)
+                
+                unordered_list_node = HTMLNode("ul", None, blockChildren)
+                overallhtmlnodes.append(unordered_list_node)
+                        
+                
+            case BlockType.ordered_list:
+                # ordered lists start with number and . (1.)
+                # strip all lines of 1. and convert them to inline children and then wrap
+                
+                lines = block.split("\n")
+                blockChildren = []
+                
+                for line in lines:
+                    # checks if the first char is a digit followed by a .
+                    if re.match(r"^\d+\.\s", line):
+                        inlinecontent = line[2:].strip()
+                        inlineHTML = text_to_children(inlinecontent)
+                        
+                        # wrap in li
+                        blockChild = HTMLNode("li", None, inlineHTML)
+                        blockChildren.append(blockChild)
+                
+                ordered_list_node = HTMLNode("ol", None, blockChildren)
+                overallhtmlnodes.append(ordered_list_node)
+                        
+                
+            case BlockType.paragraph:
+                
+                inlineHTML = text_to_children(block.strip())
+                
+                paragraphNode = HTMLNode("p", None, inlineHTML)
+                overallhtmlnodes.append(paragraphNode)
+    
+    parentNode = HTMLNode("div",None, overallhtmlnodes)
+    return parentNode
+        
+    

@@ -8,7 +8,31 @@ class HTMLNode():
         self.props = props
         
     def to_html(self):
-            raise NotImplementedError
+    # If no tag, just return the value (text content)
+        if self.tag is None:
+            return self.value or ""
+        
+        # Create opening tag with properties
+        html = f"<{self.tag}{self.props_to_html()}>"
+        
+        # Add value or children content
+        if self.value is not None:
+            html += self.value
+            
+        if self.children is not None:
+            # If children is a single node (not in a list)
+            if not isinstance(self.children, list):
+                html += self.children.to_html()
+            else:
+                # If children is a list of nodes
+                for child in self.children:
+                    html += child.to_html()
+            
+        
+        # Close the tag
+        html += f"</{self.tag}>"
+        
+        return html
 
     def props_to_html(self):
         if self.props == None or len(self.props) < 1:
