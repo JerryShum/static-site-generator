@@ -1,8 +1,8 @@
 from textnode import TextNode
+from functions.copy_static import copy_static
 
-def main():
-    dummy = TextNode("This is some anchor text", "link", "https://www.boot.dev")    
-    print(dummy.__repr__())
+def main():    
+    copy_static("public", "static")
     
     
 
